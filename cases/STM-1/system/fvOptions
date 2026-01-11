@@ -1,0 +1,56 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2012                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      fvOptions;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// 修正跃移层浓度
+correctDriftDensity
+{
+    type            scalarCodedSource;
+    selectionMode   cellZone;
+    cellZone        saltation;
+
+    fields          (driftDensity);
+    name            correctDriftDensity;
+
+    codeSetValue
+    #{
+    #};
+
+    codeAddSup
+    #{
+        ;
+    #};
+
+    codeCorrect
+    #{
+        Info << "\ncorrect saltation snow drift density. (Kang et al., 2018)\n" << endl;
+        volScalarField &driftDensity = mesh().objectRegistry::lookupObjectRef<volScalarField>("driftDensity");
+
+        scalar uStar = 0.31;
+        scalar uStarT = 0.27;
+        scalar rhoAir = 1.205;
+        scalar hSaltation = 1.6 * sqr(uStar) / 2. / 9.81;
+        scalar maxValue = rhoAir / 3.29 / uStar * (1. - sqr(uStarT)/sqr(uStar));
+        forAll(driftDensity, i)
+        {
+            driftDensity[i] = (driftDensity[i] > maxValue) ? maxValue : driftDensity[i];
+        }
+    #};
+
+    codeConstrain
+    #{
+    #};
+}
+

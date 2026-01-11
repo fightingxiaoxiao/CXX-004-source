@@ -1,0 +1,115 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2012                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version         2.0;
+    format          ascii;
+    class           dictionary;
+    object          codeDict;
+}
+
+erosionFlux
+{
+    // code
+    // \left.\left(\frac{\partial \phi}{\partial z}\right)\right|_{\text {surface}} 
+    // = -\frac{1}{D_{t}} \frac{\left|M_{\text {ero }}\right|}{A_{\mathrm{hol}}}
+    code
+    #{
+        // 获得当前Patch的ID
+        label patchIndex = patch().index();
+
+        const scalar rhod = 917.;
+        const scalar Uthreshold = 0.27;
+        const scalar dt = this->db().time().deltaTValue();
+
+        volScalarField &alpha1Global = this->db().lookupObjectRef<volScalarField>("alpha.snow");
+        volScalarField &alpha2Global = this->db().lookupObjectRef<volScalarField>("alpha.air");
+
+        const volScalarField &alpha1Global_ = this->db().lookupObject<volScalarField>("alpha.snow");
+        
+
+        fvPatchField<scalar> alpha1 = patch().lookupPatchField<volScalarField, scalar>("alpha.snow");
+        fvPatchField<scalar> alpha2 = patch().lookupPatchField<volScalarField, scalar>("alpha.air");
+        const fvPatchField<scalar>& nut
+        (
+            patch().lookupPatchField<volScalarField, scalar>("nut.air")
+        );
+
+        const twoPhaseSystem& fluid = this->db().lookupObject<twoPhaseSystem>("phaseProperties");
+
+        const tmp<volSymmTensorField> Reff1 = fluid.phase1().turbulence().devRhoReff();
+        const symmTensorField& Reffp1 = Reff1().boundaryField()[patchIndex];
+
+        const tmp<volSymmTensorField> Reff2 = fluid.phase2().turbulence().devRhoReff();
+        const symmTensorField& Reffp2 = Reff2().boundaryField()[patchIndex];
+        
+        const labelUList& faceCells = patch().faceCells();
+
+        const tmp<scalarField> &alpha1Int = patch().lookupPatchField<volScalarField, scalar>("alpha.snow").patchInternalField();
+
+        const tmp<volScalarField> &rhoM = fluid.rho();
+
+        //Info << "time step size = "<< dt << endl;
+        Info << "set boundary condition." << endl;
+
+        forAll(alpha1, i)
+        {
+            vector Sfp = patch().Sf()[i];         // 面积矢量
+            scalar magSfp = patch().magSf()[i];   // 面积矢量模长
+
+            vector ssp = (-Sfp/magSfp) & (alpha1[i]*Reffp1[i]+alpha2[i]*Reffp2[i]);
+            
+            scalar uShear = sqrt(mag(ssp)/rhoM()[i]);
+
+            //Info << uShear << endl;
+            //Info << alphaGlobal.mesh().V()[faceCells[i]] << endl;
+
+            scalar deltaAlpha;
+            scalar zGrad;
+            if (uShear > Uthreshold) // 侵蚀
+            {
+                zGrad = -7e-4 * (sqr(uShear) - sqr(Uthreshold)) / (nut[i] + 1e-12);
+            }
+            else // 沉积
+            {
+                zGrad = 0.;  //发生沉积时梯度为0
+            }
+
+            //alpha1Global[faceCells[i]] = alpha1Global_.oldTime()[faceCells[i]] + deltaAlpha; // 修正第一层网格浓度
+            //alpha2Global[faceCells[i]] = 1 - alpha1Global[faceCells[i]];
+
+            alpha1[i] = alpha1Int()[i] - zGrad / patch().deltaCoeffs()[i] / rhod;
+        }
+
+        operator == (alpha1);
+    #};
+        
+    // Optional
+    codeInclude
+    #{
+        #include "fvCFD.H"
+        #include "twoPhaseSystem.H"
+        #include "PhaseCompressibleTurbulenceModel.H"
+    #};
+
+    // Optional
+    codeOptions 
+    #{
+        -I$(LIB_SRC)/phaseSystemModels/twoPhaseEuler/phaseCompressibleTurbulenceModels/lnInclude \
+        -I$(LIB_SRC)/phaseSystemModels/twoPhaseEuler/twoPhaseSystem/lnInclude \
+        -I$(LIB_SRC)/finiteVolume/lnInclude \
+        -I$(LIB_SRC)/meshTools/lnInclude \
+        -I$(LIB_SRC)/sampling/lnInclude \
+        -I$(LIB_SRC)/thermophysicalModels/basic/lnInclude \
+        -I$(LIB_SRC)/transportModels/compressible/lnInclude \
+        -I$(LIB_SRC)/transportModels/incompressible/lnInclude \
+        -I$(LIB_SRC)/TurbulenceModels/turbulenceModels/lnInclude \
+        -I$(LIB_SRC)/TurbulenceModels/compressible/lnInclude \
+        -I$(LIB_SRC)/TurbulenceModels/phaseCompressible/lnInclude 
+    #};
+}

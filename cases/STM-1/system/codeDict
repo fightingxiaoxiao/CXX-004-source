@@ -1,0 +1,108 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2012                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version         2.0;
+    format          ascii;
+    class           dictionary;
+    object          codeDict;
+}
+
+erosionFlux
+{
+    // code
+    // \left.\left(\frac{\partial \phi}{\partial z}\right)\right|_{\text {surface}} 
+    // = -\frac{1}{D_{t}} \frac{\left|M_{\text {ero }}\right|}{A_{\mathrm{hol}}}
+    code
+    #{
+        // 获得当前Patch的ID
+        label patchIndex = patch().index();
+
+        const scalar lowerLimit = 0.;
+
+        fvPatchField<scalar> Q
+        (
+            patch().lookupPatchField<volScalarField, scalar>("driftDensity")
+        );
+        
+        // 湍流黏度
+        const fvPatchField<scalar>& nut
+        (
+            patch().lookupPatchField<volScalarField, scalar>("nut")
+        );
+
+        const incompressible::turbulenceModel& turbulence = this->db().lookupObject<incompressible::turbulenceModel>
+        (
+            IOobject::groupName
+            (
+                incompressible::turbulenceModel::propertiesName,
+                internalField().group()
+            )
+        );
+
+        const tmp<volSymmTensorField> Reff = turbulence.devReff();
+        const symmTensorField& Reffp = Reff().boundaryField()[patchIndex];
+
+        // 获得与边界面相邻网格格心处的雪漂浓度
+        const tmp<scalarField> &QInt = patch().lookupPatchField<volScalarField, scalar>("driftDensity").patchInternalField();
+
+        vector zNormal = vector(0, 0, -1);
+
+        forAll(Q, i)
+        {
+            // 网格面在z方向的投影面积
+            scalar zNormalArea = patch().Sf()[i] & zNormal;
+
+            vector Sfp = patch().Sf()[i];         // 面积矢量
+            scalar magSfp = patch().magSf()[i];   // 面积矢量模长
+
+            vector ssp = (-Sfp/magSfp) & Reffp[i];
+
+            scalar uShear = sqrt(mag(ssp));
+            scalar Uthreshold = 0.27;
+
+            scalar maxQ = 1.205 / 3.29 / uShear * (1. - sqr(Uthreshold)/sqr(uShear));
+            uShear += (Uthreshold - uShear) * sqr(Q[i] / maxQ);
+
+            scalar zGrad;
+            if (uShear > Uthreshold) // 侵蚀
+            {
+                //Mp[i] = -ca * rho * UShear[i] * (1.-sqr(Uthreshold)/sqr(UShear[i])) *zArea;
+                zGrad = -7e-4 * (sqr(uShear) - sqr(Uthreshold)) / (nut[i] + 1e-16);
+            }
+            else // 沉积
+            {
+                zGrad = 0.;  //发生沉积时梯度为0
+            }
+
+            Q[i] = QInt()[i] - zGrad / patch().deltaCoeffs()[i];
+        }
+
+        operator == (Q);
+
+        //Info << "done." <<endl;
+    #};
+        
+    // Optional
+    codeInclude
+    #{
+        #include "fvCFD.H"
+        #include "turbulentTransportModel.H"
+    #};
+
+    // Optional
+    codeOptions 
+    #{
+        -I$(LIB_SRC)/finiteVolume/lnInclude \
+        -I$(LIB_SRC)/meshTools/lnInclude \
+        -I$(LIB_SRC)/TurbulenceModels/turbulenceModels/lnInclude \
+        -I$(LIB_SRC)/TurbulenceModels/incompressible/lnInclude \
+        -I$(LIB_SRC)/transportModels \
+        -I$(LIB_SRC)/transportModels/incompressible/singlePhaseTransportModel
+    #};
+}

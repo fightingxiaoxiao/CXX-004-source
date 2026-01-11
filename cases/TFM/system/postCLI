@@ -1,0 +1,36 @@
+writeBottomFlux
+{
+    type coded;
+    libs (utilityFunctionObjects);
+
+    // Name of on-the-fly generated functionObject
+    name            writeBottomFlux;
+    executeControl  writeTime;
+    writeControl    writeTime;
+
+    codeWrite
+    #{
+        // Lookup U
+        const label patchID = mesh().boundary().findPatchID("bottom.snow");
+
+        
+        const surfaceScalarField &phi = mesh().objectRegistry::lookupObject<surfaceScalarField>("phir");
+
+        //vector zNormal = vector(0, 0, -1);
+
+        IOField<scalar> phiBottom
+        (
+            IOobject
+            (
+                "phiBottom",
+                mesh().time().timeName(),
+                mesh(),
+                IOobject::NO_READ,
+                IOobject::NO_WRITE
+            ),
+            phi.boundaryField()[patchID]
+        );
+        // Write
+        phiBottom.write();
+    #};
+}

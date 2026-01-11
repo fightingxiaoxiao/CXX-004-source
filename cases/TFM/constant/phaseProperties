@@ -1,0 +1,115 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2206                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      phaseProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+phases          (snow air);
+
+snow
+{
+    diameterModel constant;
+    constantCoeffs
+    {
+        d               1.2e-4;
+    }
+
+    alphaMax        0.62;
+    residualAlpha   1e-12;
+}
+
+air
+{
+    diameterModel constant;
+    constantCoeffs
+    {
+        d               1;
+    }
+
+    residualAlpha   1e-12;
+}
+
+blending
+{
+    default
+    {
+        type            none;
+        continuousPhase air;
+    }
+}
+
+sigma
+(
+    (snow and air) 0
+);
+
+aspectRatio
+(
+);
+
+drag
+(
+    (snow in air)
+    {
+        type            GidaspowSchillerNaumann;
+        residualRe      1e-3;
+        swarmCorrection
+        {
+            type        none;
+        }
+    }
+);
+
+virtualMass
+(
+    /*
+    (particles in air)
+    {
+        type            constantCoefficient;
+        Cvm             0.5;
+    }
+    */
+);
+
+heatTransfer
+(
+);
+
+lift
+(
+);
+
+phaseTransfer
+(
+);
+
+wallLubrication
+(
+);
+
+turbulentDispersion
+(
+/*
+    (snow in air)
+    {
+        type            Gosman;
+        sigma           1.0;
+    }
+*/
+);
+
+// Minimum allowable pressure
+pMin            10000;
+
+
+// ************************************************************************* //

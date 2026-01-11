@@ -1,0 +1,232 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2012                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      fvOptions;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+codedSourceU
+{
+    type vectorCodedSource;
+    selectionMode   all;
+
+    fields          (U);
+    name            sourceU;
+    
+    codeSetValue
+    #{
+    #};
+
+    codeAddSup
+    #{
+        Info << "-------------------------------------------------------------------------------" << endl;
+        Info << "correct turbulent kinetic energy by snow drift density. (Okaze et al., 2015)" << endl;
+        Info << "-------------------------------------------------------------------------------" << endl;
+        const volVectorField& U_ = eqn.psi();
+        const volVectorField & Wf_ = mesh().objectRegistry::lookupObject<volVectorField>("Wf");
+        const volScalarField & driftDensity = mesh().objectRegistry::lookupObject<volScalarField>("driftDensity");
+        const scalarField& V = mesh().V();
+
+        vectorField& USource = eqn.source();
+
+        scalar dp = 1.2e-4;
+        scalar rhop = 917.;
+        scalar mu = 1.84e-5;
+        scalar rhoa = 1.205;
+        scalar Rp = 0.;
+
+        scalar USourceMax = 0., USourceMin = 10000.;
+        forAll(USource,i)
+        {   
+            scalar up = Foam::mag(Wf_[i]); // 相对速度
+            scalar Rep = (rhoa * up * dp) / mu + 1e-8;    //颗粒雷诺数
+
+            scalar f_drag;
+            if (Rep < 1000.)
+            {
+                f_drag = 1. + 0.15 * Foam::pow(Rep, 0.687);
+            }
+            else
+            {
+                f_drag = 0.0183 * Rep;
+            }
+            scalar Cf = 24 * f_drag / Rep;
+            
+            scalar A = 3. * driftDensity[i] * V[i] / 2. / dp / rhop;
+
+            if (A < 0.)
+            {
+                A = 0.;
+            }
+
+            vector USource_ = 0.5 * Cf * A * Foam::mag(U_[i]) * U_[i] * (1. - Rp) * (1. - Rp);
+
+            USource[i] += USource_ * V[i];
+        }
+
+        Pout << "Max source value: " << USourceMax << endl;
+        Pout << "Min source value: " << USourceMin << endl;
+    #};
+
+    codeCorrect
+    #{
+    #};
+
+    codeConstrain
+    #{
+    #};
+}
+
+
+
+
+codedSourceK
+{
+    type            scalarCodedSource;
+    selectionMode   all;
+
+    fields          (k);
+    name            sourceK;
+
+    codeSetValue
+    #{
+    #};
+
+    codeAddSup
+    #{
+        Info << "-------------------------------------------------------------------------------" << endl;
+        Info << "correct turbulent kinetic energy by snow drift density. (Okaze et al., 2015)" << endl;
+        Info << "-------------------------------------------------------------------------------" << endl;
+        const volVectorField & U_ = mesh().objectRegistry::lookupObject<volVectorField>("U");
+        const volVectorField & Wf_ = mesh().objectRegistry::lookupObject<volVectorField>("Wf");
+        const volScalarField & driftDensity = mesh().objectRegistry::lookupObject<volScalarField>("driftDensity");
+        const scalarField& V = mesh_.V();
+
+        scalarField& kSource = eqn.source();
+
+        scalar dp = 1.2e-4;
+        scalar rhop = 917.;
+        scalar mu = 1.84e-5;
+        scalar rhoa = 1.205;
+        scalar Rp = 0.;
+
+        forAll(kSource,i)
+        {   
+            scalar up = Foam::mag(Wf_[i]); // 相对速度
+            scalar Rep = (rhoa * up * dp) / mu + 1e-8;    //颗粒雷诺数
+
+            scalar f_drag;
+            if (Rep < 1000.)
+            {
+                f_drag = 1. + 0.15 * Foam::pow(Rep, 0.687);
+            }
+            else
+            {
+                f_drag = 0.0183 * Rep;
+            }
+            scalar Cf = 24 * f_drag / Rep;
+            
+            scalar A = 3. * driftDensity[i] * V[i] / 2. / dp / rhop;
+
+            if (A < 0.)
+            {
+                A = 0.;
+            }
+
+            vector USource_ = 0.5 * Cf * A * Foam::mag(U_[i]) * U_[i] * (1. - Rp) * (1. - Rp);
+            scalar kSource_ = (U_[i] & USource_) * (1. - Rp);
+            kSource[i] += kSource_ * V[i];
+        }
+    #};
+
+    codeCorrect
+    #{
+    #};
+
+    codeConstrain
+    #{
+    #};
+}
+
+
+codedSourceEpsilon
+{
+    type            scalarCodedSource;
+    selectionMode   all;
+
+    fields          (epsilon);
+    name            sourceEpsilon;
+
+    codeSetValue
+    #{
+    #};
+
+    codeAddSup
+    #{
+        Info << "-------------------------------------------------------------------------------" << endl;
+        Info << "correct epsilon. (Okaze et al., 2015)" << endl;
+        Info << "-------------------------------------------------------------------------------" << endl;
+        const volVectorField & U_ = mesh().objectRegistry::lookupObject<volVectorField>("U");
+        const volVectorField & Wf_ = mesh().objectRegistry::lookupObject<volVectorField>("Wf");
+        const volScalarField & driftDensity = mesh().objectRegistry::lookupObject<volScalarField>("driftDensity");
+        const volScalarField & k = mesh().objectRegistry::lookupObject<volScalarField>("k");
+        const volScalarField & epsilon = mesh().objectRegistry::lookupObject<volScalarField>("epsilon");
+        const scalarField& V = mesh_.V();
+
+        scalarField& epsilonSource = eqn.source();
+
+        scalar dp = 1.2e-4;
+        scalar rhop = 917.;
+        scalar mu = 1.84e-5;
+        scalar rhoa = 1.205;
+        scalar Rp = 0.;
+        scalar Cpe = 1.0;
+
+        forAll(epsilonSource,i)
+        {   
+            scalar up = Foam::mag(Wf_[i]); // 相对速度
+            scalar Rep = (rhoa * up * dp) / mu + 1e-8;    //颗粒雷诺数
+
+            scalar f_drag;
+            if (Rep < 1000.)
+            {
+                f_drag = 1. + 0.15 * Foam::pow(Rep, 0.687);
+            }
+            else
+            {
+                f_drag = 0.0183 * Rep;
+            }
+            scalar Cf = 24 * f_drag / Rep;
+            
+            scalar A = 3. * driftDensity[i] * V[i] / 2. / dp / rhop;
+
+            if (A < 0.)
+            {
+                A = 0.;
+            }
+
+            vector USource_ = 0.5 * Cf * A * Foam::mag(U_[i]) * U_[i] * (1. - Rp) * (1. - Rp);
+            scalar kSource_ = (U_[i] & USource_) * (1. - Rp);
+            scalar epsilonSource_ = epsilon[i] / k[i] * Cpe * kSource_;
+            epsilonSource[i] += epsilonSource_ * V[i];
+        }
+        
+    #};
+
+    codeCorrect
+    #{
+    #};
+
+    codeConstrain
+    #{
+    #};
+}

@@ -1,0 +1,112 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2012                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      fvOptions;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+codedSourceK
+{
+    type            scalarCodedSource;
+    selectionMode   all;
+
+    fields          (k);
+    name            sourceK;
+
+    codeSetValue
+    #{
+    #};
+
+    codeAddSup
+    #{
+        Info << "-------------------------------------------------------------------------------" << endl;
+        Info << "correct turbulent kinetic energy by snow drift density. (Tominaga et al., 2011)" << endl;
+        Info << "-------------------------------------------------------------------------------" << endl;
+        const volScalarField & k_ = mesh().objectRegistry::lookupObject<volScalarField>("k");
+        const volScalarField & epsilon_ = mesh().objectRegistry::lookupObject<volScalarField>("epsilon");
+        const volScalarField & driftDensity = mesh().objectRegistry::lookupObject<volScalarField>("driftDensity");
+        const scalarField& V = mesh_.V();
+
+        scalarField& kSource = eqn.source();
+
+        scalar dp = 1.2e-4;
+        scalar rhop = 917.;
+        scalar mu = 1.84e-5;
+        
+        scalar As = 10.;
+        scalar Cks = 2e4;
+
+        scalar tr = dp * dp * rhop / mu / 18.;
+
+        forAll(kSource,i)
+        {
+            scalar fs = 1. - exp(-1. * tr / As /(k_[i]/(epsilon_[i])));
+            kSource[i] -= 1. * Cks * fs * k_[i] / rhop / tr * driftDensity[i] * V[i];
+        }
+    #};
+
+    codeCorrect
+    #{
+    #};
+
+    codeConstrain
+    #{
+    #};
+}
+
+/*
+codedSourceEpsilon
+{
+    type            scalarCodedSource;
+    selectionMode   all;
+
+    fields          (epsilon);
+    name            sourceEpsilon;
+
+    codeSetValue
+    #{
+    #};
+
+    codeAddSup
+    #{
+        const volScalarField & k_ = mesh().objectRegistry::lookupObject<volScalarField>("k");
+        const volScalarField & epsilon_ = mesh().objectRegistry::lookupObject<volScalarField>("epsilon");
+        const volScalarField & driftDensity = mesh().objectRegistry::lookupObject<volScalarField>("driftDensity");
+        const scalarField& V = mesh_.V();
+
+        scalarField& epsilonSource = eqn.source();
+
+        scalar dp = 2e-4;
+        scalar rhop = 917.;
+        scalar mu = 1.48e-5 * 1.205;
+        
+        scalar As = 10.;
+        scalar Ces = 0.;
+
+        scalar tr = dp * dp * rhop / mu / 18.;
+
+        forAll(epsilonSource, i)
+        {
+            epsilonSource[i] -= 1. * Ces*epsilon_[i]/rhop/tr*driftDensity[i] * V[i];
+        }
+        
+    #};
+
+    codeCorrect
+    #{
+    #};
+
+    codeConstrain
+    #{
+    #};
+}
+*/
